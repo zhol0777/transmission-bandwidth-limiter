@@ -108,7 +108,8 @@ def should_throttle(db: peewee.SqliteDatabase, past_reference: datetime,
                 log.debug("TimeSlice table unpopulated! No determination can be made")
                 return False
         delta = current_data_usage - past_slice.data_usage
-        log.debug("%s has been used since %s", pretty_print_bytes(delta), past_reference)
+        log.debug("%s has been used since %s", pretty_print_bytes(delta),
+                  past_slice.timestamp)
         if delta > parse_size(usage_limit, metric='DATA'):
             return True
     return False
