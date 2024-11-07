@@ -7,10 +7,11 @@ usage: limiter.py [-h] --sqlite-file SQLITE_FILE --transmission-url TRANSMISSION
 limiter.py: error: the following arguments are required: --sqlite-file, --transmission-url, --env-file
 ```
 
-* either set up venv, or install python packages
+* either set up through venv, or install python packages natively
   * transmission-rpc
   * peewee
   * python-dotenv
+  * ruff, mypy, pylint (just for running through linting)
 * run periodically, maybe through a cron job. something like this maybe
   * ```*/15 * *   *   *   ./venv/bin/python limiter.py --sqlite-file test.sqlite3 --transmission-url http://localhost:9091 --daily-limit 10g --env-file .env```
 
