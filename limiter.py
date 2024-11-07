@@ -3,7 +3,8 @@
 limiter.py
 meant to be run as a cron job periodically
 m    h dom mon dow command
-*/15 * *   *   *   ./venv/bin/python limiter.py --sqlite-file test.sqlite3 --transmission-url http://localhost:9091 --daily-limit 10g
+*/15 * *   *   *   ./venv/bin/python limiter.py --sqlite-file test.sqlite3 --transmission-url \
+    http://localhost:9091 --daily-limit 10g
 """
 
 import argparse
@@ -33,6 +34,10 @@ time_units = {
 }
 
 log = logging.getLogger(__name__)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('[%(levelname)s] [%(asctime)s] - %(message)s')
+handler.setFormatter(formatter)
+log.addHandler(handler)
 
 
 def pretty_print_bytes(byte_amount: int) -> str:
@@ -108,8 +113,9 @@ def should_throttle(db: peewee.SqliteDatabase, past_reference: datetime,
                 log.debug("TimeSlice table unpopulated! No determination can be made")
                 return False
         delta = current_data_usage - past_slice.data_usage
+        utc_time = datetime.strptime(past_slice.timestamp, '%Y-%m-%d %H:%M:%S.%f%z')
         log.debug("%s has been used since %s", pretty_print_bytes(delta),
-                  past_slice.timestamp)
+                  utc_time.astimezone())
         if delta > parse_size(usage_limit, metric='DATA'):
             return True
     return False
@@ -121,7 +127,7 @@ def main() -> None:
     """
     args = parse_args()
     if args.debug:
-        logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+        log.setLevel(logging.DEBUG)
     parsed_url = urlparse(args.transmission_url)
     dotenv.load_dotenv(args.env_file)
 
@@ -150,11 +156,13 @@ def main() -> None:
         if args.monthly_limit:
             throttle |= should_throttle(db, now - timedelta(days=30),
                                         current_data_usage, args.monthly_limit)
-        if throttle:
-            log.warning("should activate throttle...")
+        is_throttled = transmission_client.get_session().alt_speed_enabled
+        log.debug("Should throttle: %s, current throttling state: %s", throttle, is_throttled)
+        if throttle and not transmission_client.get_session().alt_speed_enabled:
+            log.warning("Activate alt speed on Transmission...")
             transmission_client.set_session(alt_speed_enabled=True)
-        else:
-            log.debug("no activate throttle...")
+        elif transmission_client.get_session().alt_speed_enabled and not throttle:
+            log.info("De-activate alt speed on Transmission...")
             transmission_client.set_session(alt_speed_enabled=False)
         TimeSlice(timestamp=now, data_usage=current_data_usage).save()
 
