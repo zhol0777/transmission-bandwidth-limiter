@@ -2,8 +2,9 @@
 
 ```
 ╰─ python3 ./limiter.py
-usage: limiter.py [-h] --sqlite-file SQLITE_FILE --transmission-url TRANSMISSION_URL --env-file ENV_FILE [--monthly-limit MONTHLY_LIMIT]
-                  [--weekly-limit WEEKLY_LIMIT] [--daily-limit DAILY_LIMIT] [--debug]
+usage: limiter.py [-h] --sqlite-file SQLITE_FILE --transmission-url TRANSMISSION_URL --env-file ENV_FILE 
+                  [--monthly-limit MONTHLY_LIMIT] [--weekly-limit WEEKLY_LIMIT] [--daily-limit DAILY_LIMIT]
+                  [--debug] [--clear-old-data]
 limiter.py: error: the following arguments are required: --sqlite-file, --transmission-url, --env-file
 ```
 

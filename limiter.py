@@ -4,7 +4,7 @@ limiter.py
 meant to be run as a cron job periodically
 m    h dom mon dow command
 */15 * *   *   *   ./venv/bin/python limiter.py --sqlite-file test.sqlite3 --transmission-url \
-    http://localhost:9091 --daily-limit 10g
+    http://localhost:9091 --daily-limit 10g --env-file /path/to/.env
 """
 
 import argparse
@@ -80,6 +80,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weekly-limit")
     parser.add_argument("--daily-limit")
     parser.add_argument("--debug", action='store_true')
+    parser.add_argument("--clear-old-data", help="Clear time slices older than first of the month",
+                        action='store_true')
     namespace = parser.parse_args()
     if not any([namespace.monthly_limit, namespace.weekly_limit, namespace.daily_limit]):
         raise ValueError("Limit needs to be applied! "
@@ -145,6 +147,7 @@ def main() -> None:
     db = peewee.SqliteDatabase(args.sqlite_file)
     db.create_tables([TimeSlice])
     now = datetime.now(timezone.utc)
+
     throttle = False
     with db:
         if args.daily_limit:
@@ -156,6 +159,7 @@ def main() -> None:
         if args.monthly_limit:
             throttle |= should_throttle(db, now - timedelta(days=30),
                                         current_data_usage, args.monthly_limit)
+
         is_throttled = transmission_client.get_session().alt_speed_enabled
         log.debug("Should throttle: %s, current throttling state: %s", throttle, is_throttled)
         if throttle and not transmission_client.get_session().alt_speed_enabled:
@@ -164,7 +168,16 @@ def main() -> None:
         elif transmission_client.get_session().alt_speed_enabled and not throttle:
             log.info("De-activate alt speed on Transmission...")
             transmission_client.set_session(alt_speed_enabled=False)
+
         TimeSlice(timestamp=now, data_usage=current_data_usage).save()
+
+        if args.clear_old_data:
+            first_of_the_month = datetime.now().astimezone().replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0)
+            entries = TimeSlice.delete().where(
+                TimeSlice.timestamp < first_of_the_month).execute()
+            if entries:
+                log.info("Modified %s entries to clear data out", entries)
 
 
 if __name__ == '__main__':
