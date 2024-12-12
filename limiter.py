@@ -122,13 +122,16 @@ def should_throttle(db: peewee.SqliteDatabase, past_reference: datetime,
                 return False
         delta = current_data_usage - past_slice.data_usage
         utc_time = datetime.strptime(past_slice.timestamp, '%Y-%m-%d %H:%M:%S.%f%z')
-        log.debug("%s (%s above limit of %s) has been used since %s",
-                  pretty_print_bytes(delta),
-                  pretty_print_bytes(max(0, delta - usage_limit)),
-                  pretty_print_bytes(usage_limit),
-                  utc_time.astimezone())
+        usage_msg = "%s (%s above limit of %s) has been used since %s" % (
+            pretty_print_bytes(delta),
+            pretty_print_bytes(max(0, delta - usage_limit)),
+            pretty_print_bytes(usage_limit),
+            utc_time.astimezone()
+        )
         if delta > usage_limit:
+            log.warning(usage_msg)
             return True
+        log.debug(usage_msg)
     return False
 
 
@@ -178,12 +181,12 @@ def main() -> None:
             throttle |= should_throttle(db, one_month_ago,
                                         current_data_usage, args.daily_limit * 30)
         if args.weekly_limit:
-            throttle |= should_throttle(db, now - one_week_ago,
+            throttle |= should_throttle(db, one_week_ago,
                                         current_data_usage, args.weekly_limit)
-            throttle |= should_throttle(db, now - four_weeks_ago,
+            throttle |= should_throttle(db, four_weeks_ago,
                                         current_data_usage, args.weekly_limit * 4)
         if args.monthly_limit:
-            throttle |= should_throttle(db, now - one_month_ago,
+            throttle |= should_throttle(db, one_month_ago,
                                         current_data_usage, args.monthly_limit)
 
         is_throttled = transmission_client.get_session().alt_speed_enabled
