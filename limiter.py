@@ -153,9 +153,15 @@ def main() -> None:
         if args.daily_limit:
             throttle |= should_throttle(db, now - timedelta(days=1),
                                         current_data_usage, args.daily_limit)
+            throttle |= should_throttle(db, now - timedelta(weeks=1),
+                                        current_data_usage, args.daily_limit * 7)
+            throttle |= should_throttle(db, now - timedelta(days=30),
+                                        current_data_usage, args.daily_limit * 30)
         if args.weekly_limit:
             throttle |= should_throttle(db, now - timedelta(weeks=1),
                                         current_data_usage, args.weekly_limit)
+            throttle |= should_throttle(db, now - timedelta(weeks=4),
+                                        current_data_usage, args.weekly_limit * 4)
         if args.monthly_limit:
             throttle |= should_throttle(db, now - timedelta(days=30),
                                         current_data_usage, args.monthly_limit)
