@@ -156,23 +156,34 @@ def main() -> None:
     db = peewee.SqliteDatabase(args.sqlite_file)
     db.create_tables([TimeSlice])
     now = datetime.now(timezone.utc)
+    first_of_the_month = datetime.now().astimezone().replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0)
 
     throttle = False
+
+    # these calculations assume that your data cap refreshes on the first of the month
+    # and once it's the first of the month you can go nuts again
+    # modify as necessary if you just want general limiting
+    one_day_ago = max(first_of_the_month, now - timedelta(days=1))
+    one_week_ago = max(first_of_the_month, now - timedelta(weeks=1))
+    four_weeks_ago = max(first_of_the_month, now - timedelta(weeks=4))  # eh close enough
+    one_month_ago = max(first_of_the_month, now - timedelta(days=30))
+
     with db:
         if args.daily_limit:
-            throttle |= should_throttle(db, now - timedelta(days=1),
+            throttle |= should_throttle(db, one_day_ago,
                                         current_data_usage, args.daily_limit)
-            throttle |= should_throttle(db, now - timedelta(weeks=1),
+            throttle |= should_throttle(db, one_week_ago,
                                         current_data_usage, args.daily_limit * 7)
-            throttle |= should_throttle(db, now - timedelta(days=30),
+            throttle |= should_throttle(db, one_month_ago,
                                         current_data_usage, args.daily_limit * 30)
         if args.weekly_limit:
-            throttle |= should_throttle(db, now - timedelta(weeks=1),
+            throttle |= should_throttle(db, now - one_week_ago,
                                         current_data_usage, args.weekly_limit)
-            throttle |= should_throttle(db, now - timedelta(weeks=4),
+            throttle |= should_throttle(db, now - four_weeks_ago,
                                         current_data_usage, args.weekly_limit * 4)
         if args.monthly_limit:
-            throttle |= should_throttle(db, now - timedelta(days=30),
+            throttle |= should_throttle(db, now - one_month_ago,
                                         current_data_usage, args.monthly_limit)
 
         is_throttled = transmission_client.get_session().alt_speed_enabled
@@ -187,8 +198,6 @@ def main() -> None:
         TimeSlice(timestamp=now, data_usage=current_data_usage).save()
 
         if args.clear_old_data:
-            first_of_the_month = datetime.now().astimezone().replace(
-                day=1, hour=0, minute=0, second=0, microsecond=0)
             entries = TimeSlice.delete().where(
                 TimeSlice.timestamp < first_of_the_month).execute()
             if entries:
