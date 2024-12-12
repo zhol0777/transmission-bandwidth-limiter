@@ -116,7 +116,9 @@ def should_throttle(db: peewee.SqliteDatabase, past_reference: datetime,
                 return False
         delta = current_data_usage - past_slice.data_usage
         utc_time = datetime.strptime(past_slice.timestamp, '%Y-%m-%d %H:%M:%S.%f%z')
-        log.debug("%s has been used since %s", pretty_print_bytes(delta),
+        log.debug("%s (%s above limit) has been used since %s",
+                  pretty_print_bytes(delta),
+                  pretty_print_bytes(max(0, delta - usage_limit)),
                   utc_time.astimezone())
         if delta > parse_size(usage_limit, metric='DATA'):
             return True
