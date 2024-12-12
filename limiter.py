@@ -108,7 +108,7 @@ class TimeSlice(peewee.Model):
 
 
 def should_throttle(db: peewee.SqliteDatabase, past_reference: datetime,
-                    current_data_usage: int, usage_limit: int) -> bool:
+                    current_data_usage: int, usage_limit: int, is_throttled: bool) -> bool:
     with db:
         try:
             past_slice = TimeSlice.select().where(
@@ -129,7 +129,8 @@ def should_throttle(db: peewee.SqliteDatabase, past_reference: datetime,
             utc_time.astimezone()
         )
         if delta > usage_limit:
-            log.warning(usage_msg)
+            if not is_throttled:
+                log.warning(usage_msg)
             return True
         log.debug(usage_msg)
     return False
@@ -172,26 +173,29 @@ def main() -> None:
     four_weeks_ago = max(first_of_the_month, now - timedelta(weeks=4))  # eh close enough
     one_month_ago = max(first_of_the_month, now - timedelta(days=30))
 
+    is_throttled = transmission_client.get_session().alt_speed_enabled
+
     with db:
         if args.daily_limit:
             throttle |= should_throttle(db, one_day_ago,
-                                        current_data_usage, args.daily_limit)
+                                        current_data_usage, args.daily_limit, is_throttled)
             throttle |= should_throttle(db, one_week_ago,
-                                        current_data_usage, args.daily_limit * 7)
+                                        current_data_usage, args.daily_limit * 7,
+                                        is_throttled)
             throttle |= should_throttle(db, one_month_ago,
-                                        current_data_usage, args.daily_limit * 30)
+                                        current_data_usage, args.daily_limit * 30,
+                                        is_throttled)
         if args.weekly_limit:
             throttle |= should_throttle(db, one_week_ago,
-                                        current_data_usage, args.weekly_limit)
+                                        current_data_usage, args.weekly_limit, is_throttled)
             throttle |= should_throttle(db, four_weeks_ago,
-                                        current_data_usage, args.weekly_limit * 4)
+                                        current_data_usage, args.weekly_limit * 4, is_throttled)
         if args.monthly_limit:
             throttle |= should_throttle(db, one_month_ago,
-                                        current_data_usage, args.monthly_limit)
+                                        current_data_usage, args.monthly_limit, is_throttled)
 
-        is_throttled = transmission_client.get_session().alt_speed_enabled
         log.debug("Should throttle: %s, current throttling state: %s", throttle, is_throttled)
-        if throttle and not transmission_client.get_session().alt_speed_enabled:
+        if throttle and not is_throttled:
             log.warning("Activate alt speed on Transmission...")
             transmission_client.set_session(alt_speed_enabled=True)
         elif transmission_client.get_session().alt_speed_enabled and not throttle:
