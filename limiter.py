@@ -50,7 +50,7 @@ def pretty_print_bytes(byte_amount: int) -> str:
     return f"{min_val:.2f}{max_denomination}".upper()
 
 
-def parse_size(size: str, metric: str) -> int:
+def parse_size(size: str, metric: str = 'DATA') -> int:
     """
     :param size: String to parse into integer value (ex. '40m', '500G', '30d')
     :param metric: 'DATA' or 'TIME'
@@ -83,6 +83,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--clear-old-data", help="Clear time slices older than first of the month",
                         action='store_true')
     namespace = parser.parse_args()
+    if namespace.daily_limit:
+        namespace.daily_limit = parse_size(namespace.daily_limit)
+    if namespace.weekly_limit:
+        namespace.weekly_limit = parse_size(namespace.weekly_limit)
+    if namespace.monthly_limit:
+        namespace.monthly_limit = parse_size(namespace.monthly_limit)
     if not any([namespace.monthly_limit, namespace.weekly_limit, namespace.daily_limit]):
         raise ValueError("Limit needs to be applied! "
                          "Please run `./limiter.py -h` for more information")
@@ -102,7 +108,7 @@ class TimeSlice(peewee.Model):
 
 
 def should_throttle(db: peewee.SqliteDatabase, past_reference: datetime,
-                    current_data_usage: int, usage_limit: str) -> bool:
+                    current_data_usage: int, usage_limit: int) -> bool:
     with db:
         try:
             past_slice = TimeSlice.select().where(
@@ -116,13 +122,12 @@ def should_throttle(db: peewee.SqliteDatabase, past_reference: datetime,
                 return False
         delta = current_data_usage - past_slice.data_usage
         utc_time = datetime.strptime(past_slice.timestamp, '%Y-%m-%d %H:%M:%S.%f%z')
-        parsed_usage_limit = parse_size(usage_limit, metric='DATA')
         log.debug("%s (%s above limit of %s) has been used since %s",
                   pretty_print_bytes(delta),
-                  pretty_print_bytes(max(0, delta - parsed_usage_limit)),
-                  pretty_print_bytes(parsed_usage_limit),
+                  pretty_print_bytes(max(0, delta - usage_limit)),
+                  pretty_print_bytes(usage_limit),
                   utc_time.astimezone())
-        if delta > parsed_usage_limit:
+        if delta > usage_limit:
             return True
     return False
 
